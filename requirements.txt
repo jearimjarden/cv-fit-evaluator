@@ -13,3 +13,7 @@ sentence-transformers==5.4.1
 faiss-cpu==1.13.2
 openai==2.33.0
 python-dotenv==1.2.2
+
+fastapi
+httpx
+uvicorn

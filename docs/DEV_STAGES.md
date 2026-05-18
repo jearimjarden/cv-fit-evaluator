@@ -1,6 +1,6 @@
 # Development Progress
 
-## Stage 1 — Evaluation System
+## Stage 1 — Evaluation System (30 April 2026)
 Status: Completed
 
 Implemented:
@@ -10,7 +10,7 @@ Implemented:
 - Structured scoring logic
 - Explainable reasoning generation
 
-## Stage 2 — Inference System
+## Stage 2 — Inference System (7 May 2026)
 Status: Completed
 
 Implemented:
@@ -27,7 +27,7 @@ Implemented:
 - Config-driven pipeline behavior
 - Batch embedding optimization
 
-## Stage 3 — Robustness & Observability
+## Stage 3 — Robustness & Observability (12 May 2026)
 Status: Completed
 
 Implemented:
@@ -46,8 +46,8 @@ Implemented:
 - Configurable log file saving
 - Retrieval debugging workflow
 
-## Stage 4 — API Layer (FastAPI)
-Status: Current
+## Stage 4 — API Layer (FastAPI) (18 May 2026)
+Status: Completed
 
 Planned:
 - Async API endpoints
@@ -62,6 +62,8 @@ Planned:
 - Config-driven API behavior
 
 ## Stage 5 — Containerization
+Status: On Going
+
 Planned:
 - Dockerized deployment workflow
 - Config-driven runtime behavior

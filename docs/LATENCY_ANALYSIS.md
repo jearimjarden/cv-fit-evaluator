@@ -219,3 +219,74 @@ System Architecture:
 - This behavior suggests that OpenAI API instability or overload conditions can significantly impact evaluation latency because has harder reasoning complexity
 - Re-running the same analysis approximately one day later returned evaluation latency to normal levels (~14000 ms)
 - This observation highlights the importance of timeout handling, retry mechanisms, telemetry tracking, and future async/concurrent optimization strategies for production-oriented LLM systems
+
+## CV-fit RAG System v1.3 (18 May 2026)
+System Architecture:
+- CV Preprocess Pipeline:
+  - CV Parsing - LLM
+  - Semantic Chunking
+  - Embedding Generation 
+  - Artifact Persistance
+
+- Inference Pipeline:
+  - Load CV Artifact + Job Requirement
+  - Job Requirement parsing
+  - Requirement Decomposition - LLM (asynchronous)
+  - Embedding Generation
+  - Semantic Retrieval
+  - Evidence Preparation
+  - Evidence based Evaluation - LLM (asynchronous)
+  - Structured Scoring
+  - Report Generation - LLM (asynchronous)
+
+
+### Analysis 1 (Inference Pipeline):
+#### Configuration
+- cv_chunks = 27
+- jr_parsed = 5
+- component_top = 2
+- query_top = 3
+
+#### Latency Result
+![v1.3_analysis_1](images/v1.3_analysis_1.png)
+
+#### Analysis
+- Average latency inf_chunk (JR chunking):
+  - ~3474 ms
+- Average latency inf_evaluation:
+  - ~4070 ms
+- Average latency inf_report:
+  - ~4172 ms
+- Average latency inf_predict_api:
+  - ~12404 ms
+
+### Analysis 1 (API Inference Pipeline):
+#### Configuration
+- cv_chunks = 27
+- jr_parsed = 5
+- component_top = 2
+- query_top = 3
+
+#### Latency Result
+![v1.3_analysis_1](images/v1.3_analysis_1.png)
+
+#### Analysis
+- Average latency pre_parse (CV parsing):
+  - ~4329 ms
+- Average latency inf_chunk (JR chunking):
+  - ~2031 ms
+- Average latency inf_evaluation:
+  - ~4058 ms
+- Average latency inf_report:
+  - ~4676 ms
+- Average latency inf_predict_api:
+  - ~15704 ms
+
+### Analysis 1 and 2 Summary
+- Applied asynchronous concurrency for job requirement decomposition reduced latency by ~66%
+- Applied asynchronous concurrency for evaluation stages reduced latency by ~68%
+- Stage-level saturation analysis revealed concurrency ceilings under sustained load
+- Current orchestration uses batch-stage synchronization instead of streaming execution
+
+See:
+- CONCURRENCY_LOAD_TEST_ANALYSIS.md

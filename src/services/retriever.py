@@ -11,6 +11,7 @@ from ..tools.schemas import (
     CVEmbedding,
     InferenceStage,
     JREmbedding,
+    LoggerLayer,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,11 @@ def faiss_ip_search(
 
     logger.debug(
         "Vector searched",
-        extra={"stage": InferenceStage.RETRIEVAL, "result": all_base_search},
+        extra={
+            "layer": LoggerLayer.PIPELINE,
+            "stage": InferenceStage.RETRIEVAL,
+            "result": all_base_search,
+        },
     )
     return all_base_search
 
@@ -88,9 +93,10 @@ def retrieve_base_chunk(
             distance = result.query_search.distances[idx]
             if distance < threshold:
                 if filter_below_threshold:
-                    logger.warning(
+                    logger.info(
                         "Skipping low semantic retrieved chunk",
                         extra={
+                            "layer": LoggerLayer.PIPELINE,
                             "stage": InferenceStage.RETRIEVAL,
                             "query": result.query_search.query,
                             "chunk": idx_to_chunk[indice],
@@ -102,6 +108,7 @@ def retrieve_base_chunk(
                 logger.warning(
                     "Allowing low semantic retrieved chunk",
                     extra={
+                        "layer": LoggerLayer.PIPELINE,
                         "stage": InferenceStage.RETRIEVAL,
                         "query": result.query_search.query,
                         "chunk": idx_to_chunk[indice],
@@ -127,9 +134,10 @@ def retrieve_base_chunk(
 
                 if distance < threshold:
                     if filter_below_threshold:
-                        logger.warning(
+                        logger.info(
                             "Skipping low semantic retrieved chunk",
                             extra={
+                                "layer": LoggerLayer.PIPELINE,
                                 "stage": InferenceStage.RETRIEVAL,
                                 "component": component.component,
                                 "chunk": idx_to_chunk[indice],
@@ -141,6 +149,7 @@ def retrieve_base_chunk(
                     logger.warning(
                         "Allowing low semantic retrieved chunk",
                         extra={
+                            "layer": LoggerLayer.PIPELINE,
                             "stage": InferenceStage.RETRIEVAL,
                             "component": component.component,
                             "chunk": idx_to_chunk[indice],
@@ -169,7 +178,11 @@ def retrieve_base_chunk(
 
     logger.debug(
         "Chunk retrieved",
-        extra={"stage": InferenceStage.RETRIEVAL, "result": all_retrieved_chunks},
+        extra={
+            "layer": LoggerLayer.PIPELINE,
+            "stage": InferenceStage.RETRIEVAL,
+            "result": all_retrieved_chunks,
+        },
     )
 
     return all_retrieved_chunks

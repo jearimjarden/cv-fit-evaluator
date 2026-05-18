@@ -1,10 +1,14 @@
 import json
 import logging
+import asyncio
 from .prompt_builder import create_component_prompt, create_correction_prompt
 from .llm_client import LLMClient
+from ..tools.observabillity import TrackToken
+from ..tools.security import LLMAbuseProtection
 from ..tools.schemas import (
     CVChunk,
     InferenceStage,
+    LoggerLayer,
     PreprocessStage,
     StructuredCVItem,
     StructuredCVLanguage,
@@ -14,86 +18,146 @@ from ..tools.schemas import (
 logger = logging.getLogger(__name__)
 
 
-def decompose_and_validate_jr(
-    jr_parsed_text: list, llm_client: LLMClient
+async def decompose_and_validate_jr(
+    jr_parsed_text: list,
+    llm_client: LLMClient,
+    llm_abuse_protection: LLMAbuseProtection,
+    request_track_token: TrackToken,
+    api_key: str,
 ) -> list[JRChunks]:
     all_chunks = []
 
-    for idx, jr_text in enumerate(jr_parsed_text):
+    async def process_parse(idx: int, jr_text: str):
         prompt = create_component_prompt(jr_text=jr_text)
-        response = llm_client.generate(prompt=prompt, stage=InferenceStage.CHUNK)
+        response = await llm_client.generate(
+            prompt=prompt,
+            stage=InferenceStage.CHUNK,
+            request_track_token=request_track_token,
+        )
 
         try:
             dict_response = json.loads(response)
 
         except json.JSONDecodeError:
+            llm_abuse_protection.record_failure(api_key=api_key)
             logger.warning(
                 "Invalid JSON output detected, attempting JSON repair",
-                extra={"stage": InferenceStage.CHUNK},
+                extra={"layer": LoggerLayer.PIPELINE, "stage": InferenceStage.CHUNK},
             )
-            dict_response = llm_client.json_repair(context=response)
+            dict_response = await llm_client.json_repair(
+                context=response,
+                request_track_token=request_track_token,
+                api_key=api_key,
+            )
 
         dict_response["idx"] = idx
         all_chunks.append(JRChunks(**dict_response))
 
-    validated_chunks = _validate_jr_chunks(jr_chunks=all_chunks, llm_client=llm_client)
+    tasks = [
+        asyncio.create_task(
+            process_parse(idx=idx, jr_text=jr_text), name=f"task_chunker_{idx}"
+        )
+        for idx, jr_text in enumerate(jr_parsed_text)
+    ]
+
+    await asyncio.gather(*tasks)
+
+    validated_chunks = await _validate_jr_chunks(
+        jr_chunks=all_chunks,
+        llm_client=llm_client,
+        request_track_token=request_track_token,
+        api_key=api_key,
+    )
     logger.debug(
-        "Chunked JR", extra={"stage": InferenceStage.CHUNK, "result": all_chunks}
+        "Chunked JR",
+        extra={
+            "layer": LoggerLayer.PIPELINE,
+            "stage": InferenceStage.CHUNK,
+            "result": all_chunks,
+        },
     )
     return validated_chunks
 
 
-def _validate_jr_chunks(
-    jr_chunks: list[JRChunks], llm_client: LLMClient
+async def _validate_jr_chunks(
+    jr_chunks: list[JRChunks],
+    llm_client: LLMClient,
+    request_track_token: TrackToken,
+    api_key: str,
 ) -> list[JRChunks]:
-    validated_jr_components = []
-    for jr_decom in jr_chunks:
+    async def process_chunk(jr_decom: JRChunks) -> JRChunks:
+
         invalid_components = []
 
         for component in jr_decom.components:
+
             c = component.lower().strip()
+
             if len(c.split()) < 2 or c.startswith(
                 ("for ", "in ", "with ", "using ", "to ")
             ):
                 invalid_components.append(c)
 
         if invalid_components:
+
             logger.warning(
                 "Repairing invalid JR requirement",
                 extra={
+                    "layer": LoggerLayer.PIPELINE,
                     "stage": InferenceStage.CHUNKREPAIR,
                     "invalid_components": invalid_components,
                 },
             )
+
             prompt = create_correction_prompt(
                 jr_text=jr_decom.job_requirement,
                 invalid_components=invalid_components,
                 jr_components=jr_decom.components,
             )
-            response = llm_client.generate(
-                prompt=prompt, stage=InferenceStage.CHUNKREPAIR
+
+            response = await llm_client.generate(
+                prompt=prompt,
+                stage=InferenceStage.CHUNKREPAIR,
+                request_track_token=request_track_token,
             )
 
             try:
                 dict_answer = json.loads(response)
 
             except json.JSONDecodeError:
+
                 logger.warning(
                     "Invalid JSON output detected, attempting JSON repair",
-                    extra={"stage": InferenceStage.CHUNK},
+                    extra={
+                        "layer": LoggerLayer.PIPELINE,
+                        "stage": InferenceStage.CHUNK,
+                    },
                 )
-                dict_answer = llm_client.json_repair(context=response)
 
-            validated_jr_components.append(
-                JRChunks(
-                    idx=jr_decom.idx,
-                    job_requirement=jr_decom.job_requirement,
-                    components=dict_answer["components"],
-                    reason=jr_decom.reason,
+                dict_answer = await llm_client.json_repair(
+                    context=response,
+                    request_track_token=request_track_token,
+                    api_key=api_key,
                 )
+
+            return JRChunks(
+                idx=jr_decom.idx,
+                job_requirement=jr_decom.job_requirement,
+                components=dict_answer["components"],
+                reason=jr_decom.reason,
             )
-        else:
-            validated_jr_components.append(jr_decom)
+
+        return jr_decom
+
+    tasks = [
+        asyncio.create_task(
+            process_chunk(jr_decom),
+            name=f"jr_validation_{jr_decom.idx}",
+        )
+        for jr_decom in jr_chunks
+    ]
+
+    validated_jr_components = await asyncio.gather(*tasks)
 
     return validated_jr_components
 
@@ -155,7 +219,12 @@ def chunk_cv_semantic(
         chunk_idx += 1
 
     logger.debug(
-        "Chunked CV", extra={"stage": PreprocessStage.CHUNK, "result": all_chunk}
+        "Chunked CV",
+        extra={
+            "layer": LoggerLayer.PIPELINE,
+            "stage": PreprocessStage.CHUNK,
+            "result": all_chunk,
+        },
     )
     return all_chunk
 

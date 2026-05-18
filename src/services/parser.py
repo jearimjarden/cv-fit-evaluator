@@ -4,32 +4,49 @@ import logging
 from nltk.tokenize import sent_tokenize
 from .llm_client import LLMClient
 from .prompt_builder import create_cv_parser_prompt
-from ..tools.schemas import InferenceStage, PreprocessStage, StructuredCV
+from ..tools.observabillity import TrackToken
+from ..tools.security import LLMAbuseProtection
+from ..tools.schemas import InferenceStage, LoggerLayer, PreprocessStage, StructuredCV
 from ..tools.exceptions_schemas import InvalidJRError
 
 logger = logging.getLogger(__name__)
 
 
-def parse_cv_llm(cv_text: str, llm_client: LLMClient) -> StructuredCV:
+async def parse_cv_llm(
+    cv_text: str,
+    llm_client: LLMClient,
+    request_track_token: TrackToken,
+    llm_abuse_protection: LLMAbuseProtection,
+    api_key: str,
+) -> StructuredCV:
     try:
         prompt = create_cv_parser_prompt(cv_text=cv_text)
-        response = llm_client.generate(prompt, stage=PreprocessStage.PARSE)
+        response = await llm_client.generate(
+            prompt, stage=PreprocessStage.PARSE, request_track_token=request_track_token
+        )
         dict_response = json.loads(response)
         structured_cv = StructuredCV(**dict_response)
 
         logger.debug(
             "Parsed CV",
-            extra={"stage": PreprocessStage.PARSE, "result": structured_cv},
+            extra={
+                "layer": LoggerLayer.PIPELINE,
+                "stage": PreprocessStage.PARSE,
+                "result": structured_cv,
+            },
         )
         return structured_cv
 
     except json.JSONDecodeError:
+        llm_abuse_protection.record_failure(api_key=api_key)
         logger.warning(
             "Invalid JSON output detected, attempting JSON repair",
-            extra={"stage": PreprocessStage.PARSE},
+            extra={"layer": LoggerLayer.PIPELINE, "stage": PreprocessStage.PARSE},
         )
 
-        repaired_response = llm_client.json_repair(context=response)
+        repaired_response = await llm_client.json_repair(
+            context=response, request_track_token=request_track_token, api_key=api_key
+        )
         structured_cv = StructuredCV(**repaired_response)
 
         return structured_cv
@@ -52,11 +69,16 @@ def parse_normalize_jr(text: str, chunk_size: int, stride: int) -> list[str]:
 
     normalized_chunk = _normalize_jr_text(parsed_text=all_chunks)
 
-    if len(normalized_chunk) > 20:
-        raise InvalidJRError("Parsed JR could not exceed 20 parses")
+    if len(normalized_chunk) > 25:
+        raise InvalidJRError("Parsed JR could not exceed 25 parses")
 
     logger.debug(
-        "Parsed JR", extra={"stage": InferenceStage.PARSE, "result": normalized_chunk}
+        "Parsed JR",
+        extra={
+            "layer": LoggerLayer.PIPELINE,
+            "stage": InferenceStage.PARSE,
+            "result": normalized_chunk,
+        },
     )
 
     return normalized_chunk

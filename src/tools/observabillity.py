@@ -1,12 +1,10 @@
-import logging
 import time
+import inspect
 from functools import wraps
 from .schemas import ConfigLLM, LatencyStored, TokenSummary
 
-logger = logging.getLogger(__name__)
 
-
-class LatencyStore:
+class TrackLatency:
     def __init__(self):
         self.latencies = {}
 
@@ -14,42 +12,77 @@ class LatencyStore:
         self.latencies[stage] = latency_ms
 
     def get_all(self) -> LatencyStored:
-        return LatencyStored(latencies_ms=self.latencies)
+        to_return_latency = self.latencies
+        self.latencies = {}
+        return LatencyStored(latencies_ms=to_return_latency)
 
 
 def track_latency(stage: str):
+
     def decorator(func):
+        if inspect.iscoroutinefunction(func):
 
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            start_time = time.perf_counter()
+            @wraps(func)
+            async def async_wrapper(self, *args, **kwargs):
+                start_time = time.perf_counter()
 
-            try:
-                result = func(self, *args, **kwargs)
-                latency_ms = round(
-                    (time.perf_counter() - start_time) * 1000,
-                    2,
-                )
+                try:
+                    result = await func(self, *args, **kwargs)
+                    latency_ms = round(
+                        (time.perf_counter() - start_time) * 1000,
+                        2,
+                    )
+                    self.latency_store.add(
+                        stage=stage,
+                        latency_ms=latency_ms,
+                    )
+                    return result
 
-                self.latency_store.add(
-                    stage=stage,
-                    latency_ms=latency_ms,
-                )
+                except Exception:
+                    latency_ms = round(
+                        (time.perf_counter() - start_time) * 1000,
+                        2,
+                    )
+                    self.latency_store.add(
+                        stage=f"{stage}_failed",
+                        latency_ms=latency_ms,
+                    )
+                    raise
 
-                return result
+            return async_wrapper
 
-            except Exception:
-                latency_ms = round(
-                    (time.perf_counter() - start_time) * 1000,
-                    2,
-                )
-                self.latency_store.add(
-                    stage=f"{stage}_failed",
-                    latency_ms=latency_ms,
-                )
-                raise
+        else:
 
-        return wrapper
+            @wraps(func)
+            def sync_wrapper(self, *args, **kwargs):
+                start_time = time.perf_counter()
+
+                try:
+                    result = func(self, *args, **kwargs)
+                    latency_ms = round(
+                        (time.perf_counter() - start_time) * 1000,
+                        2,
+                    )
+                    self.latency_store.add(
+                        stage=stage,
+                        latency_ms=latency_ms,
+                    )
+
+                    return result
+
+                except Exception:
+                    latency_ms = round(
+                        (time.perf_counter() - start_time) * 1000,
+                        2,
+                    )
+                    self.latency_store.add(
+                        stage=f"{stage}_failed",
+                        latency_ms=latency_ms,
+                    )
+
+                    raise
+
+            return sync_wrapper
 
     return decorator
 
@@ -73,19 +106,22 @@ class TrackToken:
         self.tokens_history[stage]["prompt_token"] += prompt_token
         self.total_prompt_tokens += prompt_token
         self.total_completion_tokens += completion_tokens
-        self.total_cost_idr += (
+        self.total_cost_idr += round(
             (
-                (self.llm_config.prompt_tokens_per_1M * prompt_token)
-                + (self.llm_config.completions_tokens_per_1M * completion_tokens)
-            )
-            / 1000000
-            * self.llm_config.usd_to_idr
+                (
+                    (self.llm_config.prompt_tokens_per_1M * prompt_token)
+                    + (self.llm_config.completions_tokens_per_1M * completion_tokens)
+                )
+                / 1000000
+                * self.llm_config.usd_to_idr
+            ),
+            3,
         )
 
     def get_all(self) -> TokenSummary:
         return TokenSummary(
             total_prompt_tokens=self.total_prompt_tokens,
             total_completion_tokens=self.total_completion_tokens,
-            total_cost_idr=self.total_cost_idr,
+            total_cost_idr=round(self.total_cost_idr, 3),
             tokens_history=self.tokens_history,
         )

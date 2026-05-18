@@ -20,7 +20,7 @@ retrieval:
   query_top_k: 3
   component_top_k: 2
   threshold: 0.3
-  filter_below_threshold: False
+  filter_below_threshold: True
 evaluation:
   evidence_mul : 1.0
   capability_mul : 1.0
@@ -32,3 +32,21 @@ llm:
   prompt_tokens_per_1M: 0.15
   completions_tokens_per_1M: 0.60
   usd_to_idr: 17200
+llm_protection:
+  threshold_s: 3
+  window_time_s: 60
+  suspend_s: 300 
+resilience:
+  circuit_breaker:
+    threshold_s: 5 
+    window_time_s: 600
+  concurrency_limiter:
+    preprocess: 10
+    chunking: 6
+    evaluation: 10
+    report: 1
+  concurrency_timeout:
+    preprocess: 10
+    chunking: 20
+    evaluation: 35
+    report: 20

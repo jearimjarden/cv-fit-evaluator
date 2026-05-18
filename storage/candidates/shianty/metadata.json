@@ -1,24 +1,24 @@
 {
     "cv_name": "Ardi Pratama",
-    "created_date": "17-05-2026_16:13",
+    "created_date": "17-05-2026_15:48",
     "cv_parsed_n": 20,
-    "cv_chunked_n": 27,
-    "cv_embedding_n": 27,
+    "cv_chunked_n": 25,
+    "cv_embedding_n": 25,
     "token_summary": {
         "total_prompt_tokens": 891,
-        "total_completion_tokens": 545,
-        "total_cost_idr": 7.923,
+        "total_completion_tokens": 482,
+        "total_cost_idr": 7.273,
         "tokens_history": {
             "pre_parse": {
                 "prompt_token": 891,
-                "completion_tokens": 545
+                "completion_tokens": 482
             }
         }
     },
     "latencies_ms": {
         "latencies_ms": {
-            "pre_parse": 9225.66,
-            "pre_embed_cv": 530.57
+            "pre_parse": 9237.37,
+            "pre_embed_cv": 552.98
         }
     }
 }

@@ -300,7 +300,7 @@ Query: Familiarity with containerization tools (e.g., Docker)
 Score: 0.0
 Reason: Unfortunately, there is no evidence in your CV that demonstrates your familiarity with containerization tools like Docker. Gaining experience in this area could enhance your skill set and make you a more competitive candidate for roles that require containerization knowledge.
 
-## CV-fit Multi-Step RAG System v1.2 (15 May 2026)
+## CV-fit Multi-Step RAG System v1.2 (12 May 2026)
 ### a. CV Preprocess Pipeline
 Decision:
 - Create a pipeline for CV preprocess (parsing, chunking, embedding, artifact generation).
@@ -436,5 +436,120 @@ Limitation:
 - Logger file path and file naming configuration are not yet configurable
 
 
+## CV-fit Multi-Step RAG System v1.3 (18 May 2026)
+### a. Integrated FastAPI Architecture
+Decision:
+- Migrated the v1.2 pipeline system into a FastAPI backend architecture
+- Added dependency injection
+- Added lifespan-managed application state
+- Added request middleware
+- Added route-based endpoint separation
+- Added centralized FastAPI exception handling
+
+Reason:
+- Lifespan management is used to initialize and maintain shared application-scoped services during runtime
+- Dependency injection improves service access, maintainability, and future extensibility
+- Middleware enables request-level observability, authentication, and request processing control
+- Route separation improves endpoint responsibility isolation
+- Centralized exception handling improves API-level robustness and consistent error responses
+
+Limitation:
+- The current architecture still experiences instability when deployed using multiple workers
+- Shared runtime state and orchestration behavior are not yet fully designed for multi-worker execution environments
+
+### b. Built Artifact Manager
+Decision:
+- Implemented a dedicated artifact manager service for:
+  - CV artifact persistence
+  - artifact loading
+  - artifact existence validation
+  - artifact integrity validation
+  - artifact deletion
+
+Reason:
+- The system requires reusable persistence and IO management for preprocessed CV artifacts
+- Separating artifact operations into a dedicated service improves maintainability, validation consistency, and pipeline reusability
+- Persistent artifacts reduce repeated preprocessing, embedding generation, token usage, and inference latency
+
+Limitation:
+- The current artifact manager does not yet support overwriting existing CV artifacts
+- Artifact persistence currently relies on local storage and is not yet designed for distributed storage environments
+
+### c. Implemented Asynchronous Multi-Stage Orchestration
+Decision:
+- Added asynchronous orchestration for preprocess and inference pipelines
+- Implemented fanout concurrency for job requirement decomposition and evaluation stages
+
+Reason:
+- FastAPI already supports asynchronous request handling at the API level
+- The preprocess and inference pipelines rely heavily on upstream OpenAI requests, making asynchronous execution beneficial for reducing stage latency
+- Fanout concurrency was introduced to parallelize job requirement decomposition and evaluation workloads
+
+Limitation:
+- The current orchestration model uses batch-stage synchronization instead of streaming execution
+- Downstream stages must wait until all asynchronous tasks from the previous stage are completed
+- This limits the ability to fully utilize upstream OpenAI concurrency capacity under sustained workloads before saturation occurs
+
+### d. Added Circuit Breaker
+Decision:
+- Added a circuit breaker mechanism for upstream LLM generation requests
+
+Reason:
+- LLM generation depends on external upstream services used throughout the system
+- External failures such as:
+  - timeout errors
+  - OpenAI rate limiting
+  - insufficient API credit balance
+  - connection instability
+  can propagate and destabilize the inference pipeline
+- The circuit breaker temporarily blocks upstream generation requests after repeated failures to reduce cascading errors and improve system resilience
+
+Limitation:
+- Circuit breaker behavior currently uses static threshold and recovery timing configuration
+- Upstream service degradation can still increase latency before the breaker is triggered
+
+### e. Added LLM Abuse Protection
+Decision:
+- Added API-key-based abuse protection for repeated malformed LLM generation behavior
+- Implemented temporary API-key suspension using time-window-based failure tracking
+- Protection is triggered by:
+  - repeated JSON repair failures
+  - repeated malformed structured outputs
+  - business-logic validation violations caused by a specific API key
+
+Reason:
+- Users may deliberately attempt to manipulate prompts to force invalid structured LLM responses
+- Repeated malformed generations can destabilize orchestration pipelines and increase unnecessary retry/repair workloads
+- The protection mechanism reduces repeated abusive generation behavior and protects upstream orchestration stability
+
+Limitation:
+- The current system does not yet validate whether user inputs are genuinely job requirements or curriculum vitae content
+- Abuse classification currently relies primarily on malformed generation behavior rather than semantic intent validation
+
+### f. Implemented Stage-Level Concurrency Limiter and Timeout Strategy
+Decision:
+- Implemented stage-level concurrency limiters for:
+  - CV preprocessing
+  - job requirement decomposition
+  - evaluation
+  - report generation
+- Added timeout strategies for upstream LLM generation stages
+
+Reason:
+- The inference pipeline uses asynchronous fanout concurrency for decomposition and evaluation stages
+- Each stage has different workload characteristics, prompt complexity, and upstream latency behavior
+- Uncontrolled asynchronous fanout can amplify latency and trigger upstream OpenAI saturation under sustained concurrent workloads
+- Stage-level concurrency governance improves orchestration stability and upstream survivability
+
+Limitation:
+- Concurrency limiters primarily protect upstream LLM generation services from saturation
+- Current orchestration still uses batch-stage synchronization instead of streaming execution
+- Upstream OpenAI degradation and traffic variability can dynamically change effective saturation limits over time
+
+Future:
+- Implement adaptive concurrency governance based on upstream degradation behavior and runtime latency conditions
+
 ## Author
 Jearim Jarden
+
+

@@ -7,83 +7,56 @@
 * This project uses Retrieval-Augmented Generation (RAG) to improve CV evaluation by grounding scoring and reasoning in explicit and implicit evidence retrieved from the candidate’s CV.
 
 ## Current Status
-**Implemented (Stage 1-3)**:
-- Requirement-level evidence-based evaluation system
-- Modular RAG inference pipeline with FAISS semantic retrieval
-- LLM-based structured CV parsing and semantic chunking
-- Structured scoring and recruiter-style report generation
-- Robustness and failure handling infrastructure
-- Observability, telemetry, and structured JSON logging system
+### Implemented (Stage 1-4):
+* Structured JSON logging and request lifecycle observability
+* Async multi-stage orchestration with stage-level concurrency governance
+* Centralized LLM resilience system (circuit breaker, timeout strategy, malformed-response protection)
+* FastAPI backend architecture (dependency injection, lifespan management, middleware, routing)
+* API-key authentication and rate limiting with route-level access control
+* Modular service-oriented pipelines with reusable CV artifact persistence
 
-**In Progress (Stage 4)**:
-- FastAPI integration
-- Async / concurrent workflow optimization
-- API authentication and rate limiting
-- Middleware and dependency injection architecture
-
-**Planned (Stage 5)**:
+### In Progress (Stage 5):
 - Dockerized deployment workflow
+- Config-driven runtime behavior
 - Reproducible runtime environment
-- Containerized inference service
+- Containerized FastAPI inference service
+- Environment variable injection
+
+### Planned (Stage 6):
+- Cloud deployment workflow
+- Remote inference service hosting
+- Deployment monitoring and logging
+
+
+## Current Limitation
+- Current inference orchestration uses batch-stage synchronization instead of streaming execution
+- Evaluation stages wait for all decomposition tasks to complete before execution
+- Telemetry storage is not yet separated into dedicated monitoring infrastructure
+- Connection error retry classification is still limited
+- High async fanout can amplify latency under sustained concurrency pressure
+- Report generation cannot accept more than 15 Job Requirements
 
 ## System Architecture
+### 1. FastAPI Backend Architecture
+![v1.3_readme_3](docs/images/v1.3_readme_3.png)
+- Note: Shared orchestration services are initialized during FastAPI lifespan startup and accessed through dependency injection.
 
-### 1. CV Preprocess Pipeline
+### 2. Preprocess Pipeline
+![v1.3_readme_2](docs/images/v1.3_readme_2.png)
+- Note: Preprocessing artifacts are persisted to reduce repeated parsing, embedding generation, and inference latency.
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 70}} }%%
-flowchart LR
+### 3. Inference Pipeline
+![v1.3_readme_1](docs/images/v1.3_readme_1.png)
+- Note: The current orchestration uses batch-stage synchronization. Each asynchronous stage must fully complete before the next stage begins execution.
 
-A["CV Input"]
---> B["CV Parsing<br/>LLM"]
---> C["Semantic Chunking"]
---> D["Embedding Generation"]
---> E["Artifact Persistence"]
-```
-
-### 2. Inference Pipeline
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 70}} }%%
-flowchart TB
-
-subgraph Retrieval
-direction LR
-
-A["Stored CV Artifact<br/>+ Job Requirement"]
---> B["Artifact Loading<br/>& Validation"]
---> C["Job Requirement Parsing"]
---> D["Requirement Decomposition<br/>LLM"]
---> E["Embedding Generation"]
---> F["Semantic Retrieval"]
-
-end
-
-subgraph Evaluation
-direction LR
-
-G["Evidence Preparation"]
---> H["Evidence-Based<br/>LLM Evaluation"]
---> I["Structured Scoring"]
---> J["Report Generation<br/>LLM"]
-
-end
-
-Retrieval --> Evaluation
-```
 
 ## Production-Oriented Features
-* Structured JSON logging
-* **Observability and telemetry** tracking
-* Centralized **LLM failure handling**
-* **Automatic JSON repair** for structured output
-* Configurable timeout and retry mechanism
-* Retrieval threshold filtering
-* **CV artifact persistence** and integrity validation
-* Batch embedding optimization
-* **Modular service-oriented architecture**
-* Config-driven system behavior
-* Business-logic validation and repair for malformed LLM JR decomposition
+* Structured JSON logging, observability, telemetry, and request lifecycle tracking
+* Centralized LLM resilience system (circuit breaker, timeout strategy, retry handling, malformed-response repair)
+* Async multi-stage orchestration with stage-level concurrency governance
+* API-key authentication, route access control, and abuse protection
+* CV artifact persistence, integrity validation, and semantic retrieval optimization
+* Modular FastAPI backend architecture (dependency injection, lifespan management, middleware, config-driven behavior)
 
 ## Example Output
 - Evaluation Output:
@@ -107,6 +80,21 @@ Retrieval --> Evaluation
 }
 ```
 
+## Concurrency & Load Testing
+The system includes stage-level concurrency analysis and sustained load testing using `oha` and `hey`.
+
+![v1.3_analysis_5](docs/images/v1.3_concurrency_analysis_6.png)
+
+Key findings:
+- asynchronous orchestration significantly reduced stage latency under moderate concurrent workloads
+- stage-level concurrency saturation points were identified for decomposition and evaluation stages
+- uncontrolled async fanout caused orchestration instability under sustained load
+- stage-level concurrency governance improved workload stability and upstream survivability
+- sustained load testing eventually triggered upstream OpenAI rate limiting after approximately ~300 inference requests under concurrent orchestration workloads
+
+See:
+- docs/CONCURRENCY_LOAD_TEST_ANALYSIS.md
+- docs/LATENCY_ANALYSIS.md
 ## Observability & Telemetry
 The system includes observability and telemetry infrastructure for monitoring runtime behavior and optimization tradeoffs.
 
@@ -121,9 +109,6 @@ Purpose:
 - analyze token consumption
 - improve debugging workflow
 - support future production deployment and monitoring
-
-Current Limitation:
-- retrieval debugging telemetry is not yet implemented
 
 Example:
 - Latency Telemetry:
@@ -194,11 +179,6 @@ Example validation log:
 }
 ```
 
-Current limitations:
-- connection error retry classification is still limited
-- telemetry logging is not yet separated into dedicated telemetry storage
-- async/concurrent failure orchestration is not yet implemented
-
 ## Key Design Decisions
 - Combined component-level retrieval with full job requirement retrieval to improve evaluation context coverage
 - Separated evaluation into:
@@ -221,6 +201,9 @@ Current limitations:
     - LLM token usage and cost analysis across versions
 4. docs/LLM_GENERATION.md:
     - LLM generation realibility analysis
+5. docs/CONCURRENCY_LOAD_TEST_ANALYSIS.md
+    - Concurrency for LLM upstream analysis
+    - Load test analysis
 
 ## How to use
 ### Local Setup

@@ -9,10 +9,11 @@ from ..tools.schemas import (
     JRChunks,
     JREmbedding,
     EmbeddingModel,
+    LoggerLayer,
     PipelineStage,
     PreprocessStage,
 )
-from ..tools.observabillity import LatencyStore, track_latency
+from ..tools.observabillity import TrackLatency, track_latency
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     def __init__(
         self,
-        latency_store: LatencyStore,
+        latency_store: TrackLatency,
         model_name: EmbeddingModel = EmbeddingModel.MINI_LLM,
         device: EmbeddingDevice = EmbeddingDevice.CPU,
     ) -> None:
@@ -37,7 +38,7 @@ class EmbeddingService:
             elif not cuda_available:
                 logger.warning(
                     "CUDA not available for embedding model switching to CPU",
-                    extra={"stage": PipelineStage.EMBED},
+                    extra={"layer": LoggerLayer.PIPELINE, "stage": PipelineStage.EMBED},
                 )
                 self.model = SentenceTransformer(
                     model_name.value,
@@ -76,6 +77,7 @@ class EmbeddingService:
         logger.debug(
             "Embedded CV",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": PreprocessStage.EMBED,
                 "CV_embedding": len(all_cv_embedding),
             },
@@ -140,6 +142,7 @@ class EmbeddingService:
         logger.debug(
             "Embedded JR",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.EMBED,
                 "JR_embedding": len(all_jr_embedding),
             },

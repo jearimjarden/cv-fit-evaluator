@@ -1,0 +1,25 @@
+api_keys:
+  internal_dev:
+    key: "dev_secret"
+    rate_limit: 1000
+    allowed_routes:
+      - "*"
+
+  frontend_app:
+    key: "frontend_secret"
+    rate_limit: 100
+    allowed_routes:
+      - "/inference"
+      - "/preprocess"
+      - "/delete"
+      - "/candidates"
+      - "/config"
+
+  testing_client:
+    key: "testing_secret"
+    rate_limit: 2
+    allowed_routes:
+      - "/inference"
+      - "/preprocess"
+      
+rate_limit_window: 5

@@ -88,7 +88,8 @@ Analysis:
 
 ## Analysis 4 (Separated Preprocess and Inference Pipeline)
 Result: 
-![v1.2_token_analysis_4](images/v1.2_token_analysis_4.png)
+
+![v1.2_token_analysis_4](images/v1.2_token_analysis_1.png)
 
 ### Analysis
 - Average preprocess pipeline cost:

@@ -1,0 +1,137 @@
+[
+    {
+        "idx": 0,
+        "type": "Technical Skill",
+        "chunk": "Technical Skills (Programming Languages): Python, C++, SQL (basic)"
+    },
+    {
+        "idx": 1,
+        "type": "Technical Skill",
+        "chunk": "Technical Skills (Frameworks / Backend): FastAPI, Flask, REST API development"
+    },
+    {
+        "idx": 2,
+        "type": "Technical Skill",
+        "chunk": "Technical Skills (Machine Learning & Data): scikit-learn, TensorFlow (basic understanding), Pandas, NumPy, Data preprocessing, Feature engineering"
+    },
+    {
+        "idx": 3,
+        "type": "Technical Skill",
+        "chunk": "Technical Skills (Tools & Platforms): Git, Linux, JSON / CSV processing, Postman"
+    },
+    {
+        "idx": 4,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Developed internal REST APIs using FastAPI"
+    },
+    {
+        "idx": 5,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Created endpoints for data retrieval, filtering, and processing"
+    },
+    {
+        "idx": 6,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Worked with JSON request/response workflows"
+    },
+    {
+        "idx": 7,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Assisted debugging backend service issues"
+    },
+    {
+        "idx": 8,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Collaborated with senior developers for feature integration"
+    },
+    {
+        "idx": 9,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Reduced manual reporting process by automating API-based data retrieval"
+    },
+    {
+        "idx": 10,
+        "type": "Work Experience",
+        "chunk": "Work Experience (Backend Developer Intern): Improved response structure consistency across several endpoints"
+    },
+    {
+        "idx": 11,
+        "type": "Project",
+        "chunk": "Project (Personal ML Classification Project): Built a machine learning classification pipeline using scikit-learn"
+    },
+    {
+        "idx": 12,
+        "type": "Project",
+        "chunk": "Project (Personal ML Classification Project): Performed preprocessing, feature cleaning, and label preparation"
+    },
+    {
+        "idx": 13,
+        "type": "Project",
+        "chunk": "Project (Personal ML Classification Project): Evaluated model performance using precision, recall, and F1-score"
+    },
+    {
+        "idx": 14,
+        "type": "Project",
+        "chunk": "Project (Personal ML Classification Project): Compared Logistic Regression and Random Forest models"
+    },
+    {
+        "idx": 15,
+        "type": "Project",
+        "chunk": "Project (Automation & Data Processing Scripts): Created Python scripts for automated data collection and cleaning"
+    },
+    {
+        "idx": 16,
+        "type": "Project",
+        "chunk": "Project (Automation & Data Processing Scripts): Processed CSV and JSON datasets from multiple sources"
+    },
+    {
+        "idx": 17,
+        "type": "Project",
+        "chunk": "Project (Automation & Data Processing Scripts): Built reusable scripts for formatting and validation"
+    },
+    {
+        "idx": 18,
+        "type": "Project",
+        "chunk": "Project (Mini API Service Project): Built a small Flask-based API service for testing prediction requests"
+    },
+    {
+        "idx": 19,
+        "type": "Project",
+        "chunk": "Project (Mini API Service Project): Implemented basic request validation and logging"
+    },
+    {
+        "idx": 20,
+        "type": "Project",
+        "chunk": "Project (Mini API Service Project): Tested endpoints using Postman"
+    },
+    {
+        "idx": 21,
+        "type": "Language",
+        "chunk": "Language: Indonesian (Native)"
+    },
+    {
+        "idx": 22,
+        "type": "Language",
+        "chunk": "Language: English (Professional Working Proficiency)"
+    },
+    {
+        "idx": 23,
+        "type": "Soft Skills",
+        "chunk": "Soft Skills: Problem-solving, Analytical thinking, Team collaboration"
+    },
+    {
+        "idx": 24,
+        "type": "Soft Skills",
+        "chunk": "Soft Skills: Team collaboration, Communication, Adaptability"
+    },
+    {
+        "idx": 25,
+        "type": "Soft Skills",
+        "chunk": "Soft Skills: Adaptability, Time management, Attention to detail"
+    },
+    {
+        "idx": 26,
+        "type": "Soft Skills",
+        "chunk": "Soft Skills: Attention to detail, Continuous learning"
+    }
+]

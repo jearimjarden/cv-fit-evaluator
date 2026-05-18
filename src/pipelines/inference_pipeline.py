@@ -1,14 +1,10 @@
+import logging
 from typing import Type, TypeVar
 from pydantic import ValidationError
+from dataclasses import asdict
 from .preprocess_pipeline import PreprocessPipeline
-from ..tools.exceptions_schemas import (
-    InferenceError,
-    PreprocessorError,
-    InvalidFileError,
-    LLMError,
-    LoggedError,
-)
-from ..IO.load_cv import load_cv_all
+from ..IO.artifact_manager import ArtifactManager
+from ..IO.json_loader import load_json
 from ..services.evaluator import EvaluatorService
 from ..services.llm_client import LLMClient
 from ..services.parser import parse_normalize_jr
@@ -18,8 +14,18 @@ from ..services.retriever import (
     retrieve_base_chunk,
 )
 from ..services.chunker import decompose_and_validate_jr
-from ..IO.json_loader import load_json
-from ..tools.observabillity import LatencyStore, TrackToken, track_latency
+from ..tools.security import LLMAbuseProtection
+from ..tools.exceptions_schemas import (
+    InferenceError,
+    InvalidJRError,
+    LLMInvalidSchemas,
+    PreprocessError,
+    InvalidFileError,
+    LLMError,
+    ArtifactError,
+    LoggedPipelineError,
+)
+from ..tools.observabillity import TrackLatency, TrackToken, track_latency
 from ..tools.schemas import (
     BaseRetrieval,
     CVChunk,
@@ -32,10 +38,10 @@ from ..tools.schemas import (
     JRChunks,
     JREmbedding,
     JRInput,
+    LoggerLayer,
     Report,
     PipelineStage,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,42 +51,37 @@ class InferencePipeline:
         self,
         config: Config,
         settings: Env,
-        latency_store: LatencyStore,
+        track_latency: TrackLatency,
         track_token: TrackToken,
+        llm_client: LLMClient,
+        evaluator_service: EvaluatorService,
+        embedding_service: EmbeddingService,
+        preprocess_pipeline: PreprocessPipeline,
+        artifact_manager: ArtifactManager,
+        llm_abuse_protection: LLMAbuseProtection,
     ) -> None:
         self.settings = settings
         self.config = config
-        self.latency_store = latency_store
+        self.latency_store = track_latency
         self.track_token = track_token
-        self.llm_client = LLMClient(
-            api_key=self.settings.oa_api_key,
-            track_token=self.track_token,
-            config=self.config,
-            model=self.config.llm.model,
-        )
-        self.embedding_service = EmbeddingService(
-            device=self.config.embedding.device, latency_store=self.latency_store
-        )
-        self.evaluator_service = EvaluatorService(
-            llm_client=self.llm_client,
-            evaluation=self.config.evaluation,
-            latency_store=self.latency_store,
-        )
-        self.preprocess = PreprocessPipeline(
-            config=self.config,
-            settings=self.settings,
-            track_token=self.track_token,
-            latency_store=self.latency_store,
-            embedding_service=self.embedding_service,
-        )
+        self.llm_client = llm_client
+        self.embedding_service = embedding_service
+        self.evaluator_service = evaluator_service
+        self.preprocess_pipeline = preprocess_pipeline
+        self.artifact_manager = artifact_manager
+        self.llm_abuse_protection = llm_abuse_protection
 
-    def run(self, cv_selection: str, jr_input: JRInput) -> Report:
+    async def run(self, candidate_name: str, jr_input: JRInput, api_key: str) -> Report:
+        self.api_key = api_key
+        self.request_track_token = TrackToken(llm_config=self.config.llm)
+
         try:
             if self.config.input_mode == InputMode.FILE:
-                report = self.predict_file()
+                report = await self.predict_file()
                 logger.info(
                     "File predicted",
                     extra={
+                        "layer": LoggerLayer.PIPELINE,
                         "stage": PipelineStage.INFERENCE,
                         "latencies": self.latency_store.get_all().latencies_ms,
                     },
@@ -89,18 +90,22 @@ class InferencePipeline:
                 logger.info(
                     "Token Tracked",
                     extra={
+                        "layer": LoggerLayer.PIPELINE,
                         "stage": PipelineStage.INFERENCE,
-                        "summary": self.track_token.get_all(),
+                        "summary": asdict(self.request_track_token.get_all()),
                     },
                 )
 
                 return report
 
             elif self.config.input_mode == InputMode.API:
-                report = self.predict_api(cv_selection=cv_selection, jr_input=jr_input)
+                report = await self.predict_api(
+                    candidate_name=candidate_name, jr_input=jr_input
+                )
                 logger.info(
                     "API predicted",
                     extra={
+                        "layer": LoggerLayer.PIPELINE,
                         "stage": PipelineStage.INFERENCE,
                         "latencies": self.latency_store.get_all().latencies_ms,
                     },
@@ -109,69 +114,85 @@ class InferencePipeline:
                 logger.info(
                     "Token Tracked",
                     extra={
+                        "layer": LoggerLayer.PIPELINE,
                         "stage": PipelineStage.INFERENCE,
-                        "summary": self.track_token.get_all(),
+                        "summary": asdict(self.request_track_token.get_all()),
                     },
                 )
 
                 return report
 
-            raise LLMError(
-                "Inference Pipeline Failed Unexpectedly", stage=PipelineStage.INFERENCE
+            else:
+                raise Exception
+
+        except (
+            LLMError,
+            InferenceError,
+            PreprocessError,
+            ArtifactError,
+        ) as e:
+            logger.error(
+                str(e),
+                extra={
+                    "layer": LoggerLayer.EXCEPTION,
+                    "stage": e.stage,
+                    "error_type": e.error_type,
+                    "code": e.code,
+                },
+            )
+            logger.error(
+                "Error occured in inference pipeline",
+                extra={
+                    "layer": LoggerLayer.PIPELINE,
+                    "stage": PipelineStage.INFERENCE,
+                    "latencies": self.latency_store.get_all().latencies_ms,
+                },
             )
 
-        except (LLMError, InferenceError, PreprocessorError) as e:
-            logger.error(str(e), extra={"stage": e.stage})
-            raise LoggedError from e
-
-        except ValidationError as e:
-            messages = []
-
-            for err in e.errors():
-                field = ".".join(str(x) for x in err["loc"])
-
-                if err["type"] == "missing":
-                    messages.append(f"Missing config parameter: '{field}'")
-
-                elif err["type"] == "extra_forbidden":
-                    messages.append(f"Forbidden extra config parameter: '{field}'")
-
-                else:
-                    messages.append(f"Invalid config value for '{field}': {err['msg']}")
-
-            logger.error(" | ".join(messages), extra={"stage": PipelineStage.INFERENCE})
-
-            raise LoggedError from e
+            raise LoggedPipelineError(
+                str(e),
+                stage=e.stage,
+                error_type=e.error_type,
+                code=e.code,
+                status_code=e.status_code,
+            ) from e
 
     @track_latency(stage=InferenceStage.PREDICTFILE)
-    def predict_file(self) -> Report:
+    async def predict_file(self) -> Report:
 
         cv_input, jr_input = self.load_cv_jr_file()
         logger.info(
             "Retrieved raw CV and JR input",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.FILEINPUT,
                 "cv_length(n)": len(cv_input.text),
                 "jr_length(n)": len(jr_input.text),
             },
         )
 
-        cv_parsed = self.preprocess.parse_cv(cv_input=cv_input)
+        cv_parsed = await self.preprocess_pipeline.parse_cv(
+            cv_input=cv_input,
+            request_track_token=self.request_track_token,
+            api_key=self.api_key,
+        )
         jr_parsed = self.parse_jr(jr_input=jr_input)
         logger.info(
             "Parsed raw CV and JR",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.PARSE,
                 "cv_parsed(n)": len(cv_parsed),
                 "jr_parsed(n)": len(jr_parsed),
             },
         )
 
-        cv_chunks = self.preprocess.chunk_cv(cv_parsed=cv_parsed)
-        jr_chunks = self.chunk_jr(jr_parsed_text=jr_parsed)
+        cv_chunks = self.preprocess_pipeline.chunk_cv(cv_parsed=cv_parsed)
+        jr_chunks = await self.chunk_jr(jr_parsed_text=jr_parsed)
         logger.info(
             "Chunked parsed CV and JR",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.CHUNK,
                 "cv_chunks(n)": len(cv_chunks),
                 "jr_chunks(n)": sum(len(chunk) for chunk in jr_chunks),
@@ -184,14 +205,16 @@ class InferencePipeline:
         logger.info(
             "Embedded JR chunk",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.EMBED,
             },
         )
 
-        cv_embedding = self.preprocess.embed_cv(cv_chunks=cv_chunks)
+        cv_embedding = self.preprocess_pipeline.embed_cv(cv_chunks=cv_chunks)
         logger.info(
             "Embedded CV chunk",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.EMBED,
             },
         )
@@ -202,6 +225,7 @@ class InferencePipeline:
         logger.info(
             "Retrieved similar semantic chunk",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.RETRIEVAL,
                 "base_retrieval(n)": sum(
                     len(retrieved) for retrieved in retrieved_base
@@ -209,12 +233,13 @@ class InferencePipeline:
             },
         )
 
-        evaluations = self.evaluator_service.generate_evaluation(
-            base_retrieval=retrieved_base
+        evaluations = await self.evaluator_service.generate_evaluation(
+            base_retrieval=retrieved_base, request_track_token=self.request_track_token
         )
         logger.info(
             "Successfully generated evaluation",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.EVALUATION,
                 "evaluations(n)": len(evaluations),
             },
@@ -224,29 +249,39 @@ class InferencePipeline:
         logger.info(
             "Successfully generated score",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.SCORING,
                 "scores": [score.score for score in scores],
             },
         )
 
-        reports = self.evaluator_service.generate_report(
-            scores=scores, candidate_name=cv_parsed.person_name
+        reports = await self.evaluator_service.generate_report(
+            scores=scores,
+            candidate_name=cv_parsed.person_name,
+            request_track_token=self.request_track_token,
         )
 
         logger.info(
             "Successfully generated report",
-            extra={"stage": InferenceStage.REPORT, "final_score": reports.report_score},
+            extra={
+                "layer": LoggerLayer.PIPELINE,
+                "stage": InferenceStage.REPORT,
+                "final_score": reports.report_score,
+            },
         )
 
         return reports
 
     @track_latency(stage=InferenceStage.PREDICTAPI)
-    def predict_api(self, cv_selection: str, jr_input: JRInput) -> Report:
-        metadata, cv_chunks, cv_embedding = self.load_cv(cv_selection=cv_selection)
+    async def predict_api(self, candidate_name: str, jr_input: JRInput) -> Report:
+        metadata, cv_chunks, cv_embedding = self.load_cv_artifact(
+            candidate_name=candidate_name
+        )
         logger.info(
             "CV acquired",
             extra={
-                "stage": InferenceStage.APIINPUT,
+                "layer": LoggerLayer.PIPELINE,
+                "stage": InferenceStage.ARTIFACT,
                 "person_name": metadata.cv_name,
                 "cv_chunks_n": metadata.cv_chunked_n,
             },
@@ -255,15 +290,17 @@ class InferencePipeline:
         logger.info(
             "Parsed raw JR",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.PARSE,
                 "jr_parsed(n)": len(jr_parsed),
             },
         )
 
-        jr_chunks = self.chunk_jr(jr_parsed_text=jr_parsed)
+        jr_chunks = await self.chunk_jr(jr_parsed_text=jr_parsed)
         logger.info(
             "Chunked parsed JR",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.CHUNK,
                 "jr_chunks(n)": sum(len(chunk) for chunk in jr_chunks),
             },
@@ -274,6 +311,7 @@ class InferencePipeline:
         logger.info(
             "Embedded chunked JR",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.EMBED,
             },
         )
@@ -284,6 +322,7 @@ class InferencePipeline:
         logger.info(
             "Retrieved similar semantic chunk",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.RETRIEVAL,
                 "base_retrieval(n)": sum(
                     len(retrieved) for retrieved in retrieved_base
@@ -291,12 +330,13 @@ class InferencePipeline:
             },
         )
 
-        evaluations = self.evaluator_service.generate_evaluation(
-            base_retrieval=retrieved_base
+        evaluations = await self.evaluator_service.generate_evaluation(
+            base_retrieval=retrieved_base, request_track_token=self.request_track_token
         )
         logger.info(
             "Successfully generated evaluation",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.EVALUATION,
                 "evaluations(n)": len(evaluations),
             },
@@ -306,36 +346,54 @@ class InferencePipeline:
         logger.info(
             "Successfully generated score",
             extra={
+                "layer": LoggerLayer.PIPELINE,
                 "stage": InferenceStage.SCORING,
                 "scores": [score.score for score in scores],
             },
         )
 
-        reports = self.evaluator_service.generate_report(
-            scores=scores, candidate_name=metadata.cv_name
+        reports = await self.evaluator_service.generate_report(
+            scores=scores,
+            candidate_name=metadata.cv_name,
+            request_track_token=self.request_track_token,
         )
 
         logger.info(
             "Successfully generated report",
-            extra={"stage": InferenceStage.REPORT, "final_score": reports.report_score},
+            extra={
+                "layer": LoggerLayer.PIPELINE,
+                "stage": InferenceStage.REPORT,
+                "final_score": reports.report_score,
+            },
         )
 
         return reports
 
-    def load_cv(self, cv_selection: str):
-        return load_cv_all(cv_selection=cv_selection)
+    def load_cv_artifact(self, candidate_name: str):
+        return self.artifact_manager.load_cv_all(candidate_name=candidate_name)
 
     @track_latency(stage=InferenceStage.CHUNK)
-    def chunk_jr(
+    async def chunk_jr(
         self,
         jr_parsed_text: list[str],
     ) -> list[JRChunks]:
-        return decompose_and_validate_jr(
-            jr_parsed_text=jr_parsed_text, llm_client=self.llm_client
-        )
+        try:
+            return await decompose_and_validate_jr(
+                jr_parsed_text=jr_parsed_text,
+                llm_client=self.llm_client,
+                llm_abuse_protection=self.llm_abuse_protection,
+                api_key=self.api_key,
+                request_track_token=self.request_track_token,
+            )
+
+        except ValidationError as e:
+            self.llm_abuse_protection.record_failure(api_key=self.api_key)
+            raise LLMInvalidSchemas(str(e)) from e
 
     def parse_jr(self, jr_input: JRInput) -> list[str]:
         """Default Job Requirement Parser using New Line and Normalization"""
+        if len(jr_input.text) < 20:
+            raise InvalidJRError("JR input could not have less than 20 characters")
 
         parsed_normalized_jr = parse_normalize_jr(
             text=jr_input.text,
@@ -368,7 +426,11 @@ class InferencePipeline:
 
         logger.debug(
             "Retrieved Chunk",
-            extra={"stage": InferenceStage.RETRIEVAL, "result": retrieved_chunks},
+            extra={
+                "layer": LoggerLayer.PIPELINE,
+                "stage": InferenceStage.RETRIEVAL,
+                "result": retrieved_chunks,
+            },
         )
         return retrieved_chunks
 
@@ -418,8 +480,25 @@ class InferencePipeline:
     def load_from_config(
         cls: Type[T],
         config: Config,
-        setting: Env,
-        latency_store: LatencyStore,
+        settings: Env,
+        track_latency: TrackLatency,
         track_token: TrackToken,
+        llm_client: LLMClient,
+        evaluator_service: EvaluatorService,
+        embedding_service: EmbeddingService,
+        preprocess_pipeline: PreprocessPipeline,
+        artifact_manager: ArtifactManager,
+        llm_abuse_protection: LLMAbuseProtection,
     ) -> T:
-        return cls(config, setting, latency_store, track_token)
+        return cls(
+            config=config,
+            settings=settings,
+            track_latency=track_latency,
+            track_token=track_token,
+            llm_client=llm_client,
+            evaluator_service=evaluator_service,
+            embedding_service=embedding_service,
+            preprocess_pipeline=preprocess_pipeline,
+            artifact_manager=artifact_manager,
+            llm_abuse_protection=llm_abuse_protection,
+        )

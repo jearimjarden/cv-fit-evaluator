@@ -1,0 +1,105 @@
+{
+    "person_name": "Ardi Pratama",
+    "education": [
+        "Bachelor of Electrical Engineering"
+    ],
+    "technical_skills": [
+        {
+            "name": "Programming Languages",
+            "item": [
+                "Python",
+                "C++",
+                "SQL (basic)"
+            ]
+        },
+        {
+            "name": "Frameworks / Backend",
+            "item": [
+                "FastAPI",
+                "Flask",
+                "REST API development"
+            ]
+        },
+        {
+            "name": "Machine Learning & Data",
+            "item": [
+                "scikit-learn",
+                "TensorFlow (basic understanding)",
+                "Pandas",
+                "NumPy",
+                "Data preprocessing",
+                "Feature engineering"
+            ]
+        },
+        {
+            "name": "Tools & Platforms",
+            "item": [
+                "Git",
+                "Linux",
+                "JSON / CSV processing",
+                "Postman"
+            ]
+        }
+    ],
+    "work_experience": [
+        {
+            "name": "Backend Developer Intern",
+            "item": [
+                "Developed internal REST APIs using FastAPI",
+                "Created endpoints for data retrieval, filtering, and processing",
+                "Worked with JSON request/response workflows",
+                "Assisted debugging backend service issues",
+                "Collaborated with senior developers for feature integration",
+                "Reduced manual reporting process by automating API-based data retrieval",
+                "Improved response structure consistency across several endpoints"
+            ]
+        }
+    ],
+    "project": [
+        {
+            "name": "Personal ML Classification Project",
+            "item": [
+                "Built a machine learning classification pipeline using scikit-learn",
+                "Performed preprocessing, feature cleaning, and label preparation",
+                "Evaluated model performance using precision, recall, and F1-score",
+                "Compared Logistic Regression and Random Forest models"
+            ]
+        },
+        {
+            "name": "Automation & Data Processing Scripts",
+            "item": [
+                "Created Python scripts for automated data collection and cleaning",
+                "Processed CSV and JSON datasets from multiple sources",
+                "Built reusable scripts for formatting and validation"
+            ]
+        },
+        {
+            "name": "Mini API Service Project",
+            "item": [
+                "Built a small Flask-based API service for testing prediction requests",
+                "Implemented basic request validation and logging",
+                "Tested endpoints using Postman"
+            ]
+        }
+    ],
+    "soft_skills": [
+        "Problem-solving",
+        "Analytical thinking",
+        "Team collaboration",
+        "Communication",
+        "Adaptability",
+        "Time management",
+        "Attention to detail",
+        "Continuous learning"
+    ],
+    "languages": [
+        {
+            "name": "Indonesian",
+            "level": "Native"
+        },
+        {
+            "name": "English",
+            "level": "Professional Working Proficiency"
+        }
+    ]
+}

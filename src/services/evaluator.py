@@ -1,14 +1,18 @@
 import logging
 import json
 from datetime import datetime
+import asyncio
+from pydantic import ValidationError
 from .llm_client import LLMClient
 from .prompt_builder import create_score_prompt, create_report_prompt
+from ..tools.exceptions_schemas import InvalidResponse, LLMInvalidSchemas
 from ..tools.schemas import (
     Capability,
     ConfigEvaluation,
     Evidence,
     Evaluation,
     InferenceStage,
+    LoggerLayer,
     ReportInput,
     Score,
     ReportScore,
@@ -17,7 +21,7 @@ from ..tools.schemas import (
     EvidenceComponent,
     EvidenceQuery,
 )
-from ..tools.observabillity import LatencyStore, track_latency
+from ..tools.observabillity import TrackLatency, TrackToken, track_latency
 
 logger = logging.getLogger(__name__)
 
@@ -27,46 +31,78 @@ class EvaluatorService:
         self,
         llm_client: LLMClient,
         evaluation: ConfigEvaluation,
-        latency_store: LatencyStore,
+        latency_store: TrackLatency,
     ) -> None:
         self.llm_client = llm_client
         self.evaluation = evaluation
         self.latency_store = latency_store
 
     @track_latency(stage=InferenceStage.EVALUATION)
-    def generate_evaluation(
+    async def generate_evaluation(
         self,
         base_retrieval: list[BaseRetrieval],
+        request_track_token: TrackToken,
     ) -> list[Evaluation]:
+
         prepared_evidence = self._prepare_evidence(base_retrieval=base_retrieval)
 
-        all_response = []
-        for evidence in prepared_evidence:
+        async def process_evidence(evidence) -> Evaluation:
+
             prompt = create_score_prompt(
-                query=evidence.query, components=evidence.component
+                query=evidence.query,
+                components=evidence.component,
             )
 
             try:
-                response = self.llm_client.generate(
-                    prompt=prompt, stage=InferenceStage.EVALUATION
+                response = await self.llm_client.generate(
+                    prompt=prompt,
+                    stage=InferenceStage.EVALUATION,
+                    request_track_token=request_track_token,
                 )
+
                 response_dict = json.loads(response)
                 response_dict["query"] = evidence.query.query
-                all_response.append(Evaluation(**response_dict))
 
             except json.JSONDecodeError:
+
                 logger.warning(
                     "Invalid JSON output detected, attempting JSON repair",
-                    extra={"stage": InferenceStage.EVALUATION},
+                    extra={
+                        "layer": LoggerLayer.PIPELINE,
+                        "stage": InferenceStage.EVALUATION,
+                    },
                 )
-                fix_response = self.llm_client.json_repair(context=response)
-                fix_response["query"] = evidence.query.query
-                all_response.append(Evaluation(**fix_response))
+
+                response_dict = await self.llm_client.json_repair(
+                    context=response,
+                    request_track_token=request_track_token,
+                )
+
+                response_dict["query"] = evidence.query.query
+
+            try:
+                return Evaluation(**response_dict)
+
+            except ValidationError as e:
+                raise LLMInvalidSchemas(str(e)) from e
+
+        tasks = [
+            asyncio.create_task(
+                process_evidence(evidence), name=f"task_evaluator_{idx}"
+            )
+            for idx, evidence in enumerate(prepared_evidence)
+        ]
+
+        all_response = await asyncio.gather(*tasks)
 
         logger.debug(
             "Evaluation generated",
-            extra={"stage": InferenceStage.EVALUATION, "result": all_response},
+            extra={
+                "stage": InferenceStage.EVALUATION,
+                "result": all_response,
+            },
         )
+
         return all_response
 
     def _prepare_evidence(
@@ -179,12 +215,16 @@ class EvaluatorService:
         return all_scoring
 
     @track_latency(stage=InferenceStage.REPORT)
-    def generate_report(self, scores: list[Score], candidate_name: str) -> Report:
+    async def generate_report(
+        self, scores: list[Score], candidate_name: str, request_track_token: TrackToken
+    ) -> Report:
         prompt = create_report_prompt(scoring=scores)
 
         try:
-            response = self.llm_client.generate(
-                prompt=prompt, stage=InferenceStage.REPORT
+            response = await self.llm_client.generate(
+                prompt=prompt,
+                stage=InferenceStage.REPORT,
+                request_track_token=request_track_token,
             )
             dict_answer = json.loads(response)
 
@@ -193,36 +233,54 @@ class EvaluatorService:
                 "Invalid JSON output detected, attempting JSON repair",
                 extra={"stage": InferenceStage.REPORT},
             )
-            dict_answer = self.llm_client.json_repair(context=response)
+            dict_answer = await self.llm_client.json_repair(
+                context=response, request_track_token=request_track_token
+            )
 
-        validated_anwer = ReportInput(**dict_answer)
+        try:
+            validated_anwer = ReportInput(**dict_answer)
+
+        except ValidationError as e:
+            raise LLMInvalidSchemas(str(e)) from e
 
         if len(scores) != len(validated_anwer.result):
             logger.warning(
-                "Report generation failed to match the number of reason",
+                "Report generation failed to match the number of reasons",
                 extra={
                     "stage": InferenceStage.REPORT,
-                    "n_reason": len(scores),
-                    "report_n": len(validated_anwer.result),
+                    "n_reason": len(validated_anwer.result),
+                    "report_n": len(scores),
                 },
+            )
+
+            raise InvalidResponse(
+                f"Length mismatch between scores ({len(scores)}) "
+                f"and validation results ({len(validated_anwer.result)})"
             )
 
         final_score = []
         all_report = []
-        for idx, score in enumerate(scores):
+
+        for score, reason in zip(scores, validated_anwer.result):
+            if not reason:
+                raise InvalidResponse(
+                    f"Empty validation reason for query: {score.query}"
+                )
+
             final_score.append(score.score)
+
             all_report.append(
                 ReportScore(
                     query=score.query,
                     score=score.score,
-                    reason=validated_anwer.result[idx],
+                    reason=reason,
                 )
             )
 
         summed_score = sum(final_score)
 
         if summed_score != 0:
-            report_score = summed_score / len(final_score)
+            report_score = round((summed_score / len(final_score)), 3)
         else:
             report_score = 0.0
 

@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from .schemas import PipelineStage
+from .schemas import APIStage, PipelineStage
 
 
 class JSONFormatter(logging.Formatter):
@@ -16,7 +16,7 @@ class JSONFormatter(logging.Formatter):
             "levelname": record.levelname,
             "name": record.name,
             "message": record.getMessage(),
-            "timestamp": datetime.now().strftime("%d/%m/%Y_%H:%M"),
+            "timestamp": datetime.now().strftime("%d-%m-%Y_%H:%M"),
             "environment": self.environment,
         }
 
@@ -54,7 +54,10 @@ class JSONFormatter(logging.Formatter):
 
 
 def setup_logger(
-    level: str, environment: str, save_log: bool, pipeline_name: PipelineStage
+    level: str,
+    environment: str,
+    save_log: bool,
+    pipeline_name: PipelineStage | APIStage,
 ) -> None:
     root = logging.getLogger()
     root.setLevel(getattr(logging, level.upper()))

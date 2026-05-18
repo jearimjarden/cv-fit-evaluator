@@ -8,16 +8,33 @@ import numpy as np
 # ===============================================================================
 # Pipeline Stage
 # ===============================================================================
+class LoggerLayer(str, Enum):
+    PIPELINE = "pipeline"
+    MIDDLEWARE = "middleware"
+    EXCEPTION = "exception"
+    RESILIENCE = "resilience"
+    SECURITY = "security"
+
+
+# ===============================================================================
+# ===============================================================================
+# Pipeline Stage
+# ===============================================================================
+class APIStage(str, Enum):
+    LIFESPAN = "api_lifespan"
+    ARTIFACT = "api_artifact"
+
+
 class PipelineStage(str, Enum):
     LLM = "llm_client"
     LLMRepair = "llm_repair"
     PREPROCESS = "preprocess_service"
     INFERENCE = "inference_service"
     EMBED = "embed_service"
+    CONFIG = "configuration"
 
 
 class InferenceStage(str, Enum):
-    APIINPUT = "inf_api_input"
     FILEINPUT = "inf_file_input"
     ARTIFACT = "inf_artifact"
     PREDICTFILE = "inf_predict_file"
@@ -33,8 +50,8 @@ class InferenceStage(str, Enum):
 
 
 class PreprocessStage(str, Enum):
-    INPUT = "pre_input"
     PARSE = "pre_parse"
+    INPUT = "pre_input"
     CHUNK = "pre_chunk"
     EMBED = "pre_embed_cv"
     SAVE = "pre_save_cv"
@@ -64,8 +81,8 @@ class EmbeddingDevice(str, Enum):
     CPU = "cpu"
 
 
-class ModelEmbedding(str, Enum):
-    MINILM = "sentence-transformers/all-MiniLM-L6-v2"
+class EmbeddingModel(str, Enum):
+    MINI_LLM = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 class LoggerLevel(str, Enum):
@@ -112,7 +129,7 @@ class ConfigJRChunk(BaseModel):
 class ConfigEmbedding(BaseModel):
     device: EmbeddingDevice = Field(...)
     batch_size: int = Field(4096, ge=4, le=16384)
-    model: ModelEmbedding = Field(...)
+    model: EmbeddingModel = Field(...)
     model_config = ConfigDict(extra="forbid")
 
 
@@ -141,6 +158,42 @@ class ConfigLLM(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ConfigLLMProtection(BaseModel):
+    threshold_s: int = Field(...)
+    window_time_s: int = Field(...)
+    suspend_s: int = Field(...)
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConfigResilienceCircuitBreaker(BaseModel):
+    threshold_s: int = Field(..., ge=1)
+    window_time_s: int = Field(..., ge=5)
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConfigResilienceConcurrencyLimiter(BaseModel):
+    preprocess: int = Field(..., ge=1)
+    chunking: int = Field(..., ge=1)
+    evaluation: int = Field(..., ge=1)
+    report: int = Field(..., ge=1)
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConfigResilienceConcurrencyTimeout(BaseModel):
+    preprocess: int = Field(..., ge=1)
+    chunking: int = Field(..., ge=1)
+    evaluation: int = Field(..., ge=1)
+    report: int = Field(..., ge=1)
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConfigResilience(BaseModel):
+    circuit_breaker: ConfigResilienceCircuitBreaker = Field(...)
+    concurrency_limiter: ConfigResilienceConcurrencyLimiter = Field(...)
+    concurrency_timeout: ConfigResilienceConcurrencyTimeout = Field(...)
+    model_config = ConfigDict(extra="forbid")
+
+
 class Config(BaseModel):
     input_mode: InputMode = Field(...)
     logger: ConfigLogger = Field(...)
@@ -150,6 +203,8 @@ class Config(BaseModel):
     retrieval: ConfigRetrieval = Field(...)
     evaluation: ConfigEvaluation = Field(...)
     llm: ConfigLLM = Field(...)
+    llm_protection: ConfigLLMProtection = Field(...)
+    resilience: ConfigResilience = Field(...)
     model_config = ConfigDict(extra="forbid")
 
 
@@ -159,11 +214,6 @@ class Config(BaseModel):
 # ===============================================================================
 # CV Schemas
 # ===============================================================================
-class CVInput(BaseModel):
-    text: str = Field(...)
-    model_config = ConfigDict(extra="forbid")
-
-
 class StructuredCVItem(BaseModel):
     name: str = Field(...)
     item: list = Field(...)
@@ -208,11 +258,6 @@ class CVEmbedding(BaseModel):
     idx: int
     embedding: np.ndarray
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class CVSelection(BaseModel):
-    text: str = Field(..., min_length=5, max_length=20)
-    model_config = ConfigDict(extra="forbid")
 
 
 # ===============================================================================
@@ -360,18 +405,6 @@ class Report(BaseModel):
     report_score: float
 
 
-# ===============================================================================
-
-
-# ===============================================================================
-# Extra Schemas
-# ===============================================================================
-
-
-class EmbeddingModel(str, Enum):
-    MINI_LLM = "sentence-transformers/all-MiniLM-L6-v2"
-
-
 class CapabilityLevel(str, Enum):
     EXPLICIT_STRONG = "explicit_strong"
     EXPLICIT_WEAK = "explicit_weak"
@@ -400,6 +433,14 @@ class Capability:
         return mapping[self.capability_level]
 
 
+# ===============================================================================
+
+
+# ===============================================================================
+# Telemetry Schemas
+# ===============================================================================
+
+
 @dataclass
 class TokenSummary:
     total_prompt_tokens: int
@@ -422,6 +463,80 @@ class Metadata:
     cv_embedding_n: int
     token_summary: TokenSummary
     latencies_ms: LatencyStored
+
+
+# ===============================================================================
+
+
+# ===============================================================================
+# FastAPI Schemas
+# ===============================================================================
+class CVInput(BaseModel):
+    text: str = Field(...)
+    model_config = ConfigDict(extra="forbid")
+
+
+class CandidateList(BaseModel):
+    candidates_list: list[str] = Field(...)
+    model_config = ConfigDict(extra="forbid")
+
+
+class PublicConfig(BaseModel):
+    embedding_model: EmbeddingModel
+    embedding_device: EmbeddingDevice
+    llm_model: LLMModel
+    query_top_k: int
+    component_top_k: int
+    retrieval_threshold: float
+    filter_below_threshold: bool
+
+
+class PublicHealth(BaseModel):
+    status: str
+    environment: str
+
+
+class ErrorResponseError(BaseModel):
+    error_type: str
+    code: str
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    status: str
+    request_id: str
+    error: ErrorResponseError
+
+
+class Telemetry(BaseModel):
+    uptime: float
+    token_summary: TokenSummary
+    total_request: int
+
+
+class BaseResponse(BaseModel):
+    status: str
+    candidate_name: str
+    model_config = ConfigDict(extra="allow")
+
+
+# ===============================================================================
+
+
+# ===============================================================================
+# Auth Config Schemas
+# ===============================================================================
+class AuthConfigKey(BaseModel):
+    key: str
+    rate_limit: int
+    allowed_routes: list[str] = []
+    model_config = ConfigDict(extra="forbid")
+
+
+class AuthConfig(BaseModel):
+    api_keys: dict[str, AuthConfigKey]
+    rate_limit_window: int
+    model_config = ConfigDict(extra="forbid")
 
 
 # ===============================================================================

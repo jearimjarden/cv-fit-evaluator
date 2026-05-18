@@ -1,17 +1,26 @@
+import asyncio
 import os
 import sys
 import logging
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+from ..IO.artifact_manager import ArtifactManager
 from ..pipelines.preprocess_pipeline import PreprocessPipeline
+from ..services.llm_client import LLMClient
 from ..services.embedder import EmbeddingService
-from ..tools.exceptions_schemas import ConfigurationError, LoggedError
+from ..tools.exceptions_schemas import (
+    BaseAppError,
+    ConfigurationError,
+    LoggedPipelineError,
+)
 from ..tools.observabillity import TrackToken
-from ..tools.observabillity import LatencyStore
+from ..tools.security import LLMAbuseProtection
+from ..tools.resilience import CircuitBreaker, ConcurrencyLimiter
+from ..tools.observabillity import TrackLatency
 from ..tools.logging_setup import setup_logger
-from ..tools.schemas import CVInput, CVSelection, Config, Env, PipelineStage
+from ..tools.schemas import AuthConfig, CVInput, Config, Env, LoggerLayer, PipelineStage
 from ..tools.logging_setup import setup_bootstrap_logger
-from ..tools.config_loader import load_config, load_env
+from ..tools.config_loader import load_auth_config, load_config, load_env
 
 # Tester
 test = {
@@ -22,43 +31,92 @@ test2 = {
 }
 
 
-def main(logger: logging.Logger, config: Config, settings: Env):
+async def main(
+    logger: logging.Logger, config: Config, settings: Env, auth_config: AuthConfig
+):
     try:
+        # telemetry
         track_token = TrackToken(llm_config=config.llm)
-        latency_store = LatencyStore()
+        latency_store = TrackLatency()
+
+        # security and resilience
+        llm_abuse_protection = LLMAbuseProtection(
+            auth_config=auth_config,
+            window_time=config.llm_protection.window_time_s,
+            threshold=config.llm_protection.threshold_s,
+            suspend_time=config.llm_protection.suspend_s,
+        )
+        circuit_breaker = CircuitBreaker(
+            threshold=config.resilience.circuit_breaker.threshold_s,
+            window_time=config.resilience.circuit_breaker.window_time_s,
+        )
+        concurrency_limiter = ConcurrencyLimiter(config=config)
+
+        # services
         embedding_service = EmbeddingService(
             latency_store=latency_store, device=config.embedding.device
         )
+        llm_client = LLMClient(
+            api_key=settings.oa_api_key,
+            track_token=track_token,
+            config=config,
+            model=config.llm.model,
+            circuit_breaker=circuit_breaker,
+            concurrency_limiter=concurrency_limiter,
+            llm_abuse_protection=llm_abuse_protection,
+        )
 
+        # IO
+        artifact_manager = ArtifactManager()
+
+        # pipelines
         preprocess_pipeline = PreprocessPipeline.start_from_config(
             config=config,
             settings=settings,
             track_token=track_token,
             latency_store=latency_store,
             embedding_service=embedding_service,
+            llm_client=llm_client,
+            artifact_manager=artifact_manager,
+            llm_abuse_protection=llm_abuse_protection,
         )
+
         logger.info(
-            "Preprocess Pipeline created", extra={"stage": PipelineStage.PREPROCESS}
+            "Preprocess Pipeline created",
+            extra={"layer": LoggerLayer.PIPELINE, "stage": PipelineStage.PREPROCESS},
         )
 
         validated_test = CVInput(**test)
-        validated_cv_name = CVSelection(text="ardi_pratama")
 
-        preprocess_pipeline.run(cv_input=validated_test, cv_name=validated_cv_name)
+        await preprocess_pipeline.run(
+            cv_input=validated_test, candidate_name="ardi_pratama", api_key="test"
+        )
 
         sys.exit(0)
 
-    except LoggedError:
+    except LoggedPipelineError:
         logger.error(
-            "Exiting Preprocess Pipeline", extra={"stage": PipelineStage.PREPROCESS}
+            "Exiting Preprocess Pipeline",
+            extra={"layer": LoggerLayer.EXCEPTION, "stage": PipelineStage.PREPROCESS},
         )
         sys.exit(1)
+
+    except BaseAppError as e:
+        logger.error(
+            str(e),
+            extra={
+                "layer": LoggerLayer.EXCEPTION,
+                "stage": e.stage,
+                "error_type": e.error_type,
+                "code": e.code,
+            },
+        )
 
     except Exception:
         logger.critical(
             "Unexpected error occured",
             exc_info=True,
-            extra={"stage": PipelineStage.PREPROCESS},
+            extra={"layer": LoggerLayer.EXCEPTION, "stage": PipelineStage.PREPROCESS},
         )
         sys.exit(2)
 
@@ -67,6 +125,7 @@ if __name__ == "__main__":
     try:
         bootstrap_logger = setup_bootstrap_logger()
 
+        auth_config = load_auth_config()
         config = load_config()
         env = load_env()
         setup_logger(
@@ -86,7 +145,9 @@ if __name__ == "__main__":
 
         logger = logging.getLogger(__name__)
 
-        main(logger=logger, config=config, settings=env)
+        asyncio.run(
+            main(logger=logger, config=config, settings=env, auth_config=auth_config)
+        )
 
     except ConfigurationError as e:
         bootstrap_logger.error(str(e))
