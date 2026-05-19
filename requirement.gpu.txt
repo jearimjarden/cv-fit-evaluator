@@ -1,24 +1,24 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+torch==2.3.1
+--extra-index-url https://download.pytorch.org/whl/cu121
+
 torch==2.3.1
 torchvision==0.18.1
 torchaudio==2.3.1
 
 numpy==1.26.4
 PyYAML==6.0.3
-
 pydantic==2.11.7
 pydantic-settings==2.10.1
-
 nltk==3.9.1
-
 sentence-transformers==5.1.0
 transformers==4.53.3
 optimum[onnxruntime]==1.27.0
 onnxruntime==1.22.1
-
 faiss-cpu==1.8.0.post1
 
 openai==1.40.6
-
 python-dotenv==1.0.1
 
 fastapi==0.115.0

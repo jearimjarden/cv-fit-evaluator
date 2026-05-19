@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.git
+logs
+storage/candidates
+.env
+.pytest_cache
+.mypy_cache
+config.yaml
+auth_config.yaml

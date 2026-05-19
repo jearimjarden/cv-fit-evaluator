@@ -32,7 +32,9 @@ class EmbeddingService:
         if device.value == "cuda":
             if cuda_available:
                 self.model = SentenceTransformer(
-                    model_name.value, device=device.value, local_files_only=True
+                    model_name.value,
+                    device=device.value,
+                    local_files_only=False,
                 )
 
             elif not cuda_available:
@@ -43,11 +45,17 @@ class EmbeddingService:
                 self.model = SentenceTransformer(
                     model_name.value,
                     device=EmbeddingDevice.CPU.value,
-                    local_files_only=True,
+                    local_files_only=False,
+                    backend="onnx",
                 )
 
         elif device.value == "cpu":
-            self.model = SentenceTransformer(model_name.value, device=device.value)
+            self.model = SentenceTransformer(
+                model_name.value,
+                device=EmbeddingDevice.CPU.value,
+                local_files_only=False,
+                backend="onnx",
+            )
 
     def _check_cuda(self) -> bool:
         return shutil.which("nvidia-smi") is not None

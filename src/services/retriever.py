@@ -93,7 +93,7 @@ def retrieve_base_chunk(
             distance = result.query_search.distances[idx]
             if distance < threshold:
                 if filter_below_threshold:
-                    logger.info(
+                    logger.warning(
                         "Skipping low semantic retrieved chunk",
                         extra={
                             "layer": LoggerLayer.PIPELINE,
@@ -134,7 +134,7 @@ def retrieve_base_chunk(
 
                 if distance < threshold:
                     if filter_below_threshold:
-                        logger.info(
+                        logger.warning(
                             "Skipping low semantic retrieved chunk",
                             extra={
                                 "layer": LoggerLayer.PIPELINE,

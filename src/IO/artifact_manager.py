@@ -173,8 +173,20 @@ class ArtifactManager:
 
     def list_candidates(self) -> CandidateList:
         list_path = Path("storage/candidates")
+
+        if not list_path.exists():
+            logger.error(
+                "There is no candidate's artifact",
+                extra={
+                    "layer": LoggerLayer.EXCEPTION,
+                    "stage": APIStage.ARTIFACT,
+                    "error_type": "ArtifactError",
+                    "code": "ArtifactNotFound",
+                },
+            )
+            raise ArtifactNotFound("There is not any canidate's artifact found")
         candidates_list = [p.name for p in list_path.iterdir() if p.is_dir()]
-        print(candidates_list)
+
         return CandidateList(candidates_list=candidates_list)
 
     def get_candidate_metadata(self, candidate_name: str) -> Metadata:

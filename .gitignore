@@ -10,3 +10,7 @@ __pycache__/
 
 # Secrets
 .env
+
+# Runtime Storage
+logs
+storage/candidates

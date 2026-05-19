@@ -60,6 +60,7 @@ class PreprocessPipeline:
     async def run(self, cv_input: CVInput, candidate_name: str, api_key: str) -> None:
         self.api_key = api_key
         self.request_track_token = TrackToken(llm_config=self.config.llm)
+
         try:
             await self.preprocess_cv(cv_input=cv_input, candidate_name=candidate_name)
             logger.info(
@@ -67,7 +68,7 @@ class PreprocessPipeline:
                 extra={
                     "layer": LoggerLayer.PIPELINE,
                     "stage": PipelineStage.PREPROCESS,
-                    "latencies": self.latency_store.get_all().latencies_ms,
+                    "latencies": self.latency_stored.latencies_ms,
                 },
             )
 
@@ -111,6 +112,7 @@ class PreprocessPipeline:
             },
         )
         self.artifact_manager.check_cv_name(cv_name_str=candidate_name)
+
         cv_parsed = await self.parse_cv(
             cv_input=cv_input,
             request_track_token=self.request_track_token,
@@ -144,13 +146,15 @@ class PreprocessPipeline:
             },
         )
 
+        self.latency_stored = self.latency_store.get_all()
+
         self.save_cv(
             cv_parsed=cv_parsed,
             cv_chunk=cv_chunks,
             cv_embedding=cv_embedding,
             candidate_name=candidate_name,
             token_summary=self.track_token.get_all(),
-            latency_stored=self.latency_store.get_all(),
+            latency_stored=self.latency_stored,
         )
 
     @track_latency(stage=PreprocessStage.PARSE)

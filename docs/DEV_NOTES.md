@@ -549,6 +549,35 @@ Limitation:
 Future:
 - Implement adaptive concurrency governance based on upstream degradation behavior and runtime latency conditions
 
+## CV-fit Multi-Step RAG System v1.4 (19 May 2026)
+## CV-fit Multi-Step RAG System v1.4 (19 May 2026)
+
+### Implemented Stage-Level Concurrency Limiter and Timeout Strategy
+Decision:
+- Dockerized FastAPI deployment workflow
+- Created Docker volume mounts for logs, storage, `config.yaml`, and `auth_config.yaml`
+- Added `.dockerignore` for non-runtime and non-persistent files
+- Introduced Docker Compose for reproducible runtime orchestration
+
+Reason:
+- deployment environments require reproducible runtime behavior
+- runtime configuration and persistent artifacts should remain mutable outside the container lifecycle
+- Docker Compose improves deployment consistency and reduces manual startup complexity
+
+Limitation:
+- GPU-oriented container deployment is not yet integrated because the current embedding workload uses lightweight models with relatively small batch sizes
+
+### b. Used ONNX Runtime for CPU Embedding Inference
+Decision:
+- Changed SentenceTransformer CPU embedding inference backend from the default PyTorch runtime to ONNX Runtime.
+
+Reason:
+- ONNX Runtime is optimized for inference deployment and provides lower runtime overhead for CPU-based transformer inference workloads.
+- ONNX also provides better deployment portability across different inference environments.
+
+Observed Result:
+- Average job requirement embedding latency decreased from ~579 ms to ~38 ms during local benchmarking (~15x improvement).
+
 ## Author
 Jearim Jarden
 

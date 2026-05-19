@@ -268,7 +268,7 @@ System Architecture:
 - query_top = 3
 
 #### Latency Result
-![v1.3_analysis_1](images/v1.3_analysis_1.png)
+![v1.3_analysis_2](images/v1.3_analysis_2.png)
 
 #### Analysis
 - Average latency pre_parse (CV parsing):
@@ -290,3 +290,18 @@ System Architecture:
 
 See:
 - CONCURRENCY_LOAD_TEST_ANALYSIS.md
+
+## CV-fit RAG System v1.4 (19 May 2026)
+
+### Analysis 1 (ONNX CPU embedding):
+#### Configuration
+- cv_chunks = 27
+- jr_parsed = 5
+- component_top = 2
+- query_top = 3
+
+#### Latency Result
+![v1.3_analysis_1](images/v1.4_analysis_1.png)
+
+#### Summary
+- ONNX Runtime provided substantial acceleration for high-token embedding inference workloads (inf_embed / job requirement embedding).

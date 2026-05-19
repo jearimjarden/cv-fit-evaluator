@@ -132,6 +132,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             },
         )
 
+        bootstrap_logger.info(
+            "Inference Pipeline created",
+            extra={
+                "config": {
+                    "input_mode": app.state.config.input_mode,
+                    "query_top_k": app.state.config.retrieval.query_top_k,
+                    "component_top_k": app.state.config.retrieval.component_top_k,
+                    "retrieval_filter": app.state.config.retrieval.filter_below_threshold,
+                    "evidence_mul": app.state.config.evaluation.evidence_mul,
+                    "capability_mul": app.state.config.evaluation.capability_mul,
+                    "responsibility_mul": app.state.config.evaluation.responsibility_mul,
+                },
+            },
+        )
     except ConfigurationError as e:
         bootstrap_logger.error(str(e))
         raise
