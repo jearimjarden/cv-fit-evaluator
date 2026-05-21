@@ -87,7 +87,12 @@ Analysis:
     - inf_report is generation-oriented and produces higher ratio because its task is to conclude input
 
 ## Analysis 4 (Separated Preprocess and Inference Pipeline)
-Result: 
+### Configuration
+- cv_length = 2328
+- jr_length = 269
+- jr_n = 5
+
+### Result
 
 ![v1.2_token_analysis_4](images/v1.2_token_analysis_1.png)
 

@@ -76,20 +76,23 @@ Variable:
 - jr_parsed = 5
 
 Concurrency Limiter (limit, timeout):
-chunking = 6, 20
-evaluation = 10, 35
-report = 1, 20
+- chunking = 6, 20
+- evaluation = 10, 35
+- report = 1, 20
 
 #### Latency Result
 Without concurrency limiter:
 1. GMT +7 16:00
+
 ![v1.3_analysis_5](images/v1.3_concurrency_analysis_6.png)
 
-With concurrency limiter:
-1. GMT +7 21:00
+2. GMT +7 21:00
+
 ![v1.3_analysis_5](images/v1.3_concurrency_analysis_8.png)
 
-2. GMT +7 16:00
+With concurrency limiter:
+1. GMT +7 16:00
+
 ![v1.3_analysis_5](images/v1.3_concurrency_analysis_7.png)
 
 #### Summary:

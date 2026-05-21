@@ -7,6 +7,9 @@
 * This project uses Retrieval-Augmented Generation (RAG) to improve CV evaluation by grounding scoring and reasoning in explicit and implicit evidence retrieved from the candidate’s CV.
 
 ## Current Status
+See:
+- DEV_NOTES.md
+
 ### Implemented (Stage 1–5)
 - Structured JSON logging and request lifecycle observability
 - Async multi-stage orchestration with stage-level concurrency governance
@@ -96,7 +99,7 @@ Key findings:
 - stage-level concurrency saturation points were identified for decomposition and evaluation stages
 - uncontrolled async fanout caused orchestration instability under sustained load
 - stage-level concurrency governance improved workload stability and upstream survivability
-- sustained load testing eventually triggered upstream OpenAI rate limiting after approximately ~300 inference requests under concurrent orchestration workloads
+- sustained load testing eventually triggered upstream OpenAI rate limiting after approximately ~300 inference requests under concurrent orchestration workloads (5 Job Requirement)
 
 See:
 - docs/CONCURRENCY_LOAD_TEST_ANALYSIS.md
@@ -125,7 +128,7 @@ Example:
 "message": "API predicted", 
 "timestamp": "19-05-2026_16:42", 
 "environment": "v.1.3", 
-"taskName": "inference-jearim12", 
+"taskName": "inference-ardi_pratama", 
 "layer": "pipeline", 
 "stage": "inference_service", 
 "latencies": {

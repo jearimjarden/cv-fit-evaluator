@@ -17,7 +17,7 @@ api_keys:
 
   testing_client:
     key: "testing_secret"
-    rate_limit: 2
+    rate_limit: 10
     allowed_routes:
       - "/inference"
       - "/preprocess"

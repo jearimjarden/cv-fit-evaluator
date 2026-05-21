@@ -261,7 +261,7 @@ Note:
 - If not enough evidence for "item" then llm return [], this [] output change the CV semantic chunk format.
 
 Example:
-"[CVChunk(idx=0, type='Technical Skill', chunk='Technical Skills (Programming Languages): Python, C++, SQL (basic)'),CVChunk(idx=10, type='Work Experience', chunk='Work Experience (Backend Developer Intern): Improved response structure consistency across several endpoints'), CVChunk(idx=22, type='Language', chunk='Language: English (Professional Working Proficiency)')]"
+- "[CVChunk(idx=0, type='Technical Skill', chunk='Technical Skills (Programming Languages): Python, C++, SQL (basic)'),CVChunk(idx=10, type='Work Experience', chunk='Work Experience (Backend Developer Intern): Improved response structure consistency across several endpoints'), CVChunk(idx=22, type='Language', chunk='Language: English (Professional Working Proficiency)')]"
 
 ### b. Final Scoring Logic
 Decision:
@@ -292,13 +292,13 @@ Note:
 - I havent try to include final score of each job's requirement as context for LLM to conclude reasoning, I assume this could improve the reasoning if the score is perfectly align and hurt the reason if the score is not correct.
 
 Example:
-"Query: Experience applying machine learning techniques to real problems
-Score: 0.525
-Reason: Your experience in building a machine learning classification pipeline using scikit-learn shows that you have a solid understanding of machine learning techniques. However, it would strengthen your profile if you could provide examples of how your work addressed specific real-world problems.
+- "Query: Experience applying machine learning techniques to real problems
+- Score: 0.525
+- Reason: Your experience in building a machine learning classification pipeline using scikit-learn shows that you have a solid understanding of machine learning techniques. However, it would strengthen your profile if you could provide examples of how your work addressed specific real-world problems.
 
-Query: Familiarity with containerization tools (e.g., Docker)
-Score: 0.0
-Reason: Unfortunately, there is no evidence in your CV that demonstrates your familiarity with containerization tools like Docker. Gaining experience in this area could enhance your skill set and make you a more competitive candidate for roles that require containerization knowledge.
+- Query: Familiarity with containerization tools (e.g., Docker)
+- Score: 0.0
+- Reason: Unfortunately, there is no evidence in your CV that demonstrates your familiarity with containerization tools like Docker. Gaining experience in this area could enhance your skill set and make you a more competitive candidate for roles that require containerization knowledge.
 
 ## CV-fit Multi-Step RAG System v1.2 (12 May 2026)
 ### a. CV Preprocess Pipeline
@@ -550,13 +550,12 @@ Future:
 - Implement adaptive concurrency governance based on upstream degradation behavior and runtime latency conditions
 
 ## CV-fit Multi-Step RAG System v1.4 (19 May 2026)
-## CV-fit Multi-Step RAG System v1.4 (19 May 2026)
 
-### Implemented Stage-Level Concurrency Limiter and Timeout Strategy
+### a. Dockerization
 Decision:
 - Dockerized FastAPI deployment workflow
 - Created Docker volume mounts for logs, storage, `config.yaml`, and `auth_config.yaml`
-- Added `.dockerignore` for non-runtime and non-persistent files
+- Added `.dockerignore`
 - Introduced Docker Compose for reproducible runtime orchestration
 
 Reason:

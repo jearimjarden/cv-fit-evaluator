@@ -125,7 +125,7 @@ System Architecture:
   - Structured Scoring
   - Report Generation - LLM
 
-### Analysis 1 (Inference pipeline without persistance CV):
+### Analysis 1 (Inference pipeline with persistance CV):
 #### Configuration
 - cv_parsed = 27
 - jr_parsed = 5
@@ -240,7 +240,7 @@ System Architecture:
   - Report Generation - LLM (asynchronous)
 
 
-### Analysis 1 (Inference Pipeline):
+### Analysis 1 (API Inference Pipeline):
 #### Configuration
 - cv_chunks = 27
 - jr_parsed = 5
@@ -260,7 +260,7 @@ System Architecture:
 - Average latency inf_predict_api:
   - ~12404 ms
 
-### Analysis 1 (API Inference Pipeline):
+### Analysis 2 (File Inference Pipeline):
 #### Configuration
 - cv_chunks = 27
 - jr_parsed = 5
